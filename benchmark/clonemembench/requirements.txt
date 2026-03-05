@@ -1,0 +1,10 @@
+# Additional dependencies for CloneMemBench evaluation
+# (beyond what xMemory's environment.yml already provides)
+#
+# xMemory already provides: openai, torch, transformers, sentence-transformers,
+# pydantic, tqdm, numpy, scikit-learn, rank-bm25, chromadb, etc.
+#
+# These are the extra packages needed by CloneMemBench eval scripts:
+json_repair>=0.25.0
+backoff>=2.2.1
+tiktoken>=0.9.0
