@@ -16,7 +16,11 @@ class MemoryConfig:
     
     # === Model Configuration ===
     llm_model: str = 'meta-llama/Meta-Llama-3.1-8B-Instruct'
+    llm_base_url: Optional[str] = None          # Custom API base URL for LLM (e.g. https://openrouter.ai/api/v1)
+    llm_api_key: Optional[str] = None           # Separate API key for LLM provider (falls back to openai_api_key)
     embedding_model: str = "text-embedding-3-small"
+    embedding_base_url: Optional[str] = None    # Custom API base URL for embeddings
+    embedding_api_key: Optional[str] = None     # Separate API key for embedding provider (falls back to openai_api_key)
     embedding_dimension: int = 1536
     
     # === Language Configuration ===
@@ -78,17 +82,23 @@ class MemoryConfig:
     episode_cache_ttl: int = 600                # Episode cache TTL
     
     # === Environment Variable Configuration ===
-    openai_api_key: Optional[str] = field(default_factory=lambda: os.getenv("OPENAI_API_KEY"))
-    
+    openai_api_key: Optional[str] = field(default_factory=lambda: os.getenv("OPENAI_API_KEY") or os.getenv("OPENROUTER_API_KEY"))
+
     # === Prediction-Correction Configuration ===
     max_statements_for_prediction: int = 10      # Maximum number of statements for prediction
     statement_similarity_threshold: float = 0.7  # Statement similarity threshold
     prediction_temperature: float = 0.3  # Temperature parameter for prediction
-    
+
     def __post_init__(self):
         """Configuration validation"""
-        if not self.openai_api_key:
-            raise ValueError("OpenAI API key is required")
+        # Resolve API keys: llm_api_key and embedding_api_key fall back to openai_api_key
+        if not self.llm_api_key:
+            self.llm_api_key = self.openai_api_key
+        if not self.embedding_api_key:
+            self.embedding_api_key = self.openai_api_key
+
+        if not self.openai_api_key and not self.llm_api_key:
+            raise ValueError("API key is required: set OPENAI_API_KEY, OPENROUTER_API_KEY, or pass llm_api_key")
         
         if self.buffer_size_min >= self.buffer_size_max:
             raise ValueError("Buffer min size must be less than max size")

@@ -49,7 +49,11 @@ def build_xmemory_config(args) -> MemoryConfig:
     return MemoryConfig(
         storage_path=storage_path,
         llm_model=args.llm_model,
+        llm_base_url=getattr(args, 'llm_base_url', None),
+        llm_api_key=getattr(args, 'llm_api_key', None),
         embedding_model=args.embedding_model,
+        embedding_base_url=getattr(args, 'embedding_base_url', None),
+        embedding_api_key=getattr(args, 'embedding_api_key', None),
         language=args.language,
         # Search configuration
         search_top_k_episodes=args.retrieve_k,
@@ -347,8 +351,16 @@ def main():
     # Model Configuration
     parser.add_argument("--llm_model", type=str, default="gpt-4o-mini",
                         help="LLM model for xMemory (boundary detection, episode/semantic generation)")
+    parser.add_argument("--llm_base_url", type=str, default=None,
+                        help="Custom API base URL for LLM (e.g. https://openrouter.ai/api/v1)")
+    parser.add_argument("--llm_api_key", type=str, default=None,
+                        help="API key for LLM provider (defaults to OPENAI_API_KEY or OPENROUTER_API_KEY)")
     parser.add_argument("--embedding_model", type=str, default="text-embedding-3-small",
                         help="Embedding model for xMemory vector search")
+    parser.add_argument("--embedding_base_url", type=str, default=None,
+                        help="Custom API base URL for embeddings (OpenRouter does NOT support embeddings)")
+    parser.add_argument("--embedding_api_key", type=str, default=None,
+                        help="API key for embedding provider (defaults to OPENAI_API_KEY)")
 
     # Search Configuration
     parser.add_argument("--search_strategy", type=str, default="hybrid",

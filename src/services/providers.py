@@ -47,12 +47,14 @@ class DefaultProviders:
     ) -> None:
         self.config = config
         self.llm_client = llm_client or LLMClient(
-            api_key=config.openai_api_key,
+            api_key=config.llm_api_key or config.openai_api_key,
             model=config.llm_model,
+            base_url=config.llm_base_url,
         )
         self.embedding_client = embedding_client or EmbeddingClient(
-            api_key=config.openai_api_key,
+            api_key=config.embedding_api_key or config.openai_api_key,
             model=config.embedding_model,
+            base_url=config.embedding_base_url,
         )
         self._episode_repo: Optional[EpisodeRepository] = None
         self._semantic_repo: Optional[SemanticRepository] = None

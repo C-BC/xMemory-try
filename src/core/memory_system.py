@@ -101,13 +101,15 @@ class MemorySystem:
             providers = DefaultProviders(self.config, llm_client=llm_client, embedding_client=embedding_client)
 
         self.llm_client = llm_client or (providers.llm_client if providers else LLMClient(
-            api_key=self.config.openai_api_key,
-            model=self.config.llm_model
+            api_key=self.config.llm_api_key or self.config.openai_api_key,
+            model=self.config.llm_model,
+            base_url=self.config.llm_base_url,
         ))
 
         self.embedding_client = embedding_client or (providers.embedding_client if providers else EmbeddingClient(
-            api_key=self.config.openai_api_key,
-            model=self.config.embedding_model
+            api_key=self.config.embedding_api_key or self.config.openai_api_key,
+            model=self.config.embedding_model,
+            base_url=self.config.embedding_base_url,
         ))
 
         if providers is None:
