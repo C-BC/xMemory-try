@@ -145,14 +145,14 @@ def search_and_build_ranked_items(
     rank = 0
 
     # Process episodic results
-    for ep in results.get("episodes", []):
+    for ep in results.get("episodic", []):
         content = ep.get("content", "") or ep.get("title", "")
         chunk_id = _match_context_id(content, ep, context_id_map)
 
         if chunk_id and chunk_id not in seen_chunk_ids:
             seen_chunk_ids.add(chunk_id)
             ranked_items.append({
-                "res_type": "chunk",
+                "res_type": "memory",
                 "rank": rank,
                 "chunk_id": chunk_id,
                 "content": content,
@@ -168,7 +168,7 @@ def search_and_build_ranked_items(
         if chunk_id and chunk_id not in seen_chunk_ids:
             seen_chunk_ids.add(chunk_id)
             ranked_items.append({
-                "res_type": "chunk",
+                "res_type": "memory",
                 "rank": rank,
                 "chunk_id": chunk_id,
                 "content": content,
@@ -184,16 +184,25 @@ def _match_context_id(content: str, result_item: dict, context_id_map: dict) -> 
     Try to match a search result back to the original context ID.
 
     Strategy:
-    1. Check metadata for context_id
+    1. Check metadata for context_id (single) or context_ids (comma-separated)
     2. Check source_episode_ids or source_messages
     3. Fuzzy match by content overlap
     """
     # Try direct metadata
     metadata = result_item.get("metadata", {})
     if isinstance(metadata, dict):
+        # Strategy 1a: direct context_id
         ctx_id = metadata.get("context_id")
-        if ctx_id:
+        if ctx_id and ctx_id in context_id_map:
             return ctx_id
+
+        # Strategy 1b: context_ids (comma-separated, from ChromaDB episode metadata)
+        ctx_ids_str = metadata.get("context_ids", "")
+        if ctx_ids_str:
+            for cid in ctx_ids_str.split(","):
+                cid = cid.strip()
+                if cid and cid in context_id_map:
+                    return cid
 
     # Try source references
     for key in ["source_episode_id", "source_episode_ids", "episode_id"]:
@@ -215,7 +224,7 @@ def _match_context_id(content: str, result_item: dict, context_id_map: dict) -> 
                 if overlap > best_overlap:
                     best_overlap = overlap
                     best_id = ctx_id
-        if best_overlap > 0.3:
+        if best_overlap > 0.15:
             return best_id
 
     return ""

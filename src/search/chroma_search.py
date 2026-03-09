@@ -199,7 +199,18 @@ class ChromaSearchEngine:
                     "timestamp": episode.timestamp.isoformat(),
                     "type": "episode"
                 }
-                
+
+                # Extract context_ids from original messages metadata
+                context_ids = []
+                for msg in episode.original_messages:
+                    msg_meta = msg.get("metadata", {})
+                    if isinstance(msg_meta, dict):
+                        ctx_id = msg_meta.get("context_id")
+                        if ctx_id and ctx_id not in context_ids:
+                            context_ids.append(ctx_id)
+                if context_ids:
+                    metadata["context_ids"] = ",".join(context_ids)
+
                 ids.append(episode.episode_id)
                 documents.append(document_text)
                 metadatas.append(metadata)
@@ -324,7 +335,18 @@ class ChromaSearchEngine:
                 "timestamp": episode.timestamp.isoformat(),
                 "type": "episode"
             }
-            
+
+            # Extract context_ids from original messages metadata
+            context_ids = []
+            for msg in episode.original_messages:
+                msg_meta = msg.get("metadata", {})
+                if isinstance(msg_meta, dict):
+                    ctx_id = msg_meta.get("context_id")
+                    if ctx_id and ctx_id not in context_ids:
+                        context_ids.append(ctx_id)
+            if context_ids:
+                metadata["context_ids"] = ",".join(context_ids)
+
             # 生成embedding
             embedding_response = self.embedding_client.embed_texts([document_text])
             embedding = embedding_response.embeddings[0]
