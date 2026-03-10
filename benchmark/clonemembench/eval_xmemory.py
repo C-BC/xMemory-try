@@ -173,24 +173,23 @@ def search_and_build_ranked_items(
     seen_chunk_ids = set()
     rank = 0
 
-    # Process episodic results — use original messages instead of summaries
+    # Process episodic results — use per-context original content
     for ep in results.get("episodic", []):
         original_messages = ep.get("original_messages", [])
 
         if original_messages:
             # Extract context_ids directly from original messages (most reliable)
             ctx_ids = _extract_context_ids_from_messages(original_messages)
-            # Use original message content instead of episode summary
-            original_content = _extract_original_content(original_messages)
 
             for ctx_id in ctx_ids:
                 if ctx_id in context_id_map and ctx_id not in seen_chunk_ids:
                     seen_chunk_ids.add(ctx_id)
+                    # Use this specific context's content, NOT the full episode
                     ranked_items.append({
                         "res_type": "memory",
                         "rank": rank,
                         "chunk_id": ctx_id,
-                        "content": original_content,
+                        "content": context_id_map[ctx_id],
                         "timestamp": ep.get("timestamp", ""),
                     })
                     rank += 1
@@ -204,7 +203,7 @@ def search_and_build_ranked_items(
                     "res_type": "memory",
                     "rank": rank,
                     "chunk_id": chunk_id,
-                    "content": content,
+                    "content": context_id_map.get(chunk_id, content),
                     "timestamp": ep.get("timestamp", ""),
                 })
                 rank += 1
@@ -216,19 +215,16 @@ def search_and_build_ranked_items(
         if source_messages:
             # Extract context_ids from source episode's original messages
             ctx_ids = _extract_context_ids_from_messages(source_messages)
-            # Combine semantic statement with source original content
-            semantic_statement = sem.get("content", "")
-            original_content = _extract_original_content(source_messages)
-            combined_content = f"[Memory] {semantic_statement}\n[Source] {original_content}"
 
             for ctx_id in ctx_ids:
                 if ctx_id in context_id_map and ctx_id not in seen_chunk_ids:
                     seen_chunk_ids.add(ctx_id)
+                    # Use this specific context's content
                     ranked_items.append({
                         "res_type": "memory",
                         "rank": rank,
                         "chunk_id": ctx_id,
-                        "content": combined_content,
+                        "content": context_id_map[ctx_id],
                         "timestamp": sem.get("timestamp", ""),
                     })
                     rank += 1
@@ -242,7 +238,7 @@ def search_and_build_ranked_items(
                     "res_type": "memory",
                     "rank": rank,
                     "chunk_id": chunk_id,
-                    "content": content,
+                    "content": context_id_map.get(chunk_id, content),
                     "timestamp": sem.get("timestamp", ""),
                 })
                 rank += 1
