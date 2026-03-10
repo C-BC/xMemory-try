@@ -110,6 +110,30 @@ def ingest_contexts(mem: xMemory, user_id: str, contexts: list, question_time: s
     return count
 
 
+def _extract_original_content(original_messages: list) -> str:
+    """Extract text content from original_messages list."""
+    if not original_messages:
+        return ""
+    parts = []
+    for msg in original_messages:
+        content = msg.get("content", "")
+        if content:
+            parts.append(content)
+    return "\n".join(parts)
+
+
+def _extract_context_ids_from_messages(original_messages: list) -> list:
+    """Extract all context_ids from original_messages metadata."""
+    context_ids = []
+    for msg in original_messages:
+        meta = msg.get("metadata", {})
+        if isinstance(meta, dict):
+            ctx_id = meta.get("context_id")
+            if ctx_id and ctx_id not in context_ids:
+                context_ids.append(ctx_id)
+    return context_ids
+
+
 def search_and_build_ranked_items(
     mem: xMemory,
     user_id: str,
@@ -121,13 +145,17 @@ def search_and_build_ranked_items(
     """
     Search xMemory and convert results to CloneMemBench ranked_items format.
 
+    Uses hierarchical memory for retrieval (locating relevant episodes/semantics),
+    then returns original message content to avoid information distortion from
+    summarization.
+
     Args:
         mem: xMemory instance
         user_id: User identifier
         question: Query string
         retrieve_k: Number of results to retrieve
         search_method: Search method (hybrid, vector, bm25)
-        context_id_map: Mapping from content substrings to original context IDs
+        context_id_map: Mapping from context_id to original content
 
     Returns:
         List of ranked_items dicts compatible with CloneMemBench eval
@@ -138,43 +166,86 @@ def search_and_build_ranked_items(
         top_k_episodes=retrieve_k,
         top_k_semantic=retrieve_k,
         search_method=search_method,
+        enrich_original_messages=True,
     )
 
     ranked_items = []
     seen_chunk_ids = set()
     rank = 0
 
-    # Process episodic results
+    # Process episodic results — use original messages instead of summaries
     for ep in results.get("episodic", []):
-        content = ep.get("content", "") or ep.get("title", "")
-        chunk_id = _match_context_id(content, ep, context_id_map)
+        original_messages = ep.get("original_messages", [])
 
-        if chunk_id and chunk_id not in seen_chunk_ids:
-            seen_chunk_ids.add(chunk_id)
-            ranked_items.append({
-                "res_type": "memory",
-                "rank": rank,
-                "chunk_id": chunk_id,
-                "content": content,
-                "timestamp": ep.get("timestamp", ""),
-            })
-            rank += 1
+        if original_messages:
+            # Extract context_ids directly from original messages (most reliable)
+            ctx_ids = _extract_context_ids_from_messages(original_messages)
+            # Use original message content instead of episode summary
+            original_content = _extract_original_content(original_messages)
 
-    # Process semantic results
+            for ctx_id in ctx_ids:
+                if ctx_id in context_id_map and ctx_id not in seen_chunk_ids:
+                    seen_chunk_ids.add(ctx_id)
+                    ranked_items.append({
+                        "res_type": "memory",
+                        "rank": rank,
+                        "chunk_id": ctx_id,
+                        "content": original_content,
+                        "timestamp": ep.get("timestamp", ""),
+                    })
+                    rank += 1
+        else:
+            # Fallback: use episode summary if no original_messages
+            content = ep.get("content", "") or ep.get("title", "")
+            chunk_id = _match_context_id(content, ep, context_id_map)
+            if chunk_id and chunk_id not in seen_chunk_ids:
+                seen_chunk_ids.add(chunk_id)
+                ranked_items.append({
+                    "res_type": "memory",
+                    "rank": rank,
+                    "chunk_id": chunk_id,
+                    "content": content,
+                    "timestamp": ep.get("timestamp", ""),
+                })
+                rank += 1
+
+    # Process semantic results — trace back to source episode original messages
     for sem in results.get("semantic", []):
-        content = sem.get("content", "")
-        chunk_id = _match_context_id(content, sem, context_id_map)
+        source_messages = sem.get("source_original_messages", [])
 
-        if chunk_id and chunk_id not in seen_chunk_ids:
-            seen_chunk_ids.add(chunk_id)
-            ranked_items.append({
-                "res_type": "memory",
-                "rank": rank,
-                "chunk_id": chunk_id,
-                "content": content,
-                "timestamp": sem.get("timestamp", ""),
-            })
-            rank += 1
+        if source_messages:
+            # Extract context_ids from source episode's original messages
+            ctx_ids = _extract_context_ids_from_messages(source_messages)
+            # Combine semantic statement with source original content
+            semantic_statement = sem.get("content", "")
+            original_content = _extract_original_content(source_messages)
+            combined_content = f"[Memory] {semantic_statement}\n[Source] {original_content}"
+
+            for ctx_id in ctx_ids:
+                if ctx_id in context_id_map and ctx_id not in seen_chunk_ids:
+                    seen_chunk_ids.add(ctx_id)
+                    ranked_items.append({
+                        "res_type": "memory",
+                        "rank": rank,
+                        "chunk_id": ctx_id,
+                        "content": combined_content,
+                        "timestamp": sem.get("timestamp", ""),
+                    })
+                    rank += 1
+        else:
+            # Fallback: use semantic content with fuzzy matching
+            content = sem.get("content", "")
+            chunk_id = _match_context_id(content, sem, context_id_map)
+            if chunk_id and chunk_id not in seen_chunk_ids:
+                seen_chunk_ids.add(chunk_id)
+                ranked_items.append({
+                    "res_type": "memory",
+                    "rank": rank,
+                    "chunk_id": chunk_id,
+                    "content": content,
+                    "timestamp": sem.get("timestamp", ""),
+                })
+                rank += 1
 
     return ranked_items
 

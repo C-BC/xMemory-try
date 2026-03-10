@@ -69,6 +69,7 @@ class xMemory:
         top_k_episodes: Optional[int] = None,
         top_k_semantic: Optional[int] = None,
         search_method: str = "hybrid",
+        enrich_original_messages: bool = False,
     ) -> Dict[str, List[Dict[str, Any]]]:
         """Search episodic + semantic memory in a single call."""
         return self._memory_system.search_all(
@@ -77,6 +78,7 @@ class xMemory:
             top_k_episodes=top_k_episodes,
             top_k_semantic=top_k_semantic,
             search_method=search_method,
+            enrich_original_messages=enrich_original_messages,
         )
 
     def stats(self, user_id: Optional[str] = None) -> Dict[str, Any]:

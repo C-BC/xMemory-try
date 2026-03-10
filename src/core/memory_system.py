@@ -821,11 +821,12 @@ class MemorySystem:
         top_k_episodes: Optional[int] = None,
         top_k_semantic: Optional[int] = None,
         search_method: str = "hybrid",
-        use_optimized_loading: bool = True
+        use_optimized_loading: bool = True,
+        enrich_original_messages: bool = False
     ) -> Dict[str, List[Dict[str, Any]]]:
         """
         Search all types of memories and return categorized results (optimized concurrency)
-        
+
         Args:
             user_id: User identifier
             query: Search query
@@ -833,7 +834,8 @@ class MemorySystem:
             top_k_semantic: Number of semantic memories to return
             search_method: Search method ("hybrid", "bm25", "vector")
             use_optimized_loading: Whether to use optimized index loading (only load required indices)
-            
+            enrich_original_messages: If True, enrich results with original_messages from episodes
+
         Returns:
             Categorized search results dictionary {"episodic": [...], "semantic": [...]}
         """
@@ -887,15 +889,79 @@ class MemorySystem:
                 },
             )
             
+            if enrich_original_messages:
+                episode_results, semantic_results = self._enrich_results_with_original_messages(
+                    user_id, episode_results, semantic_results
+                )
+
             return {
                 "episodic": episode_results,
                 "semantic": semantic_results
             }
-            
+
         except Exception as e:
             logger.error(f"Error in search_all for user {user_id}: {e}")
             return {"episodic": [], "semantic": []}
     
+    def _enrich_results_with_original_messages(
+        self,
+        user_id: str,
+        episode_results: List[Dict[str, Any]],
+        semantic_results: List[Dict[str, Any]],
+    ) -> tuple:
+        """Enrich search results with original_messages from the episode repository.
+
+        For episode results: adds original_messages if not already present.
+        For semantic results: traces source_episodes and adds their original_messages.
+
+        Returns:
+            (enriched_episode_results, enriched_semantic_results)
+        """
+        try:
+            # Build episode lookup: episode_id -> Episode object
+            all_episodes = self._episode_repository.list_by_user(user_id)
+            episodes_by_id = {ep.episode_id: ep for ep in all_episodes}
+
+            # Enrich episode results
+            for result in episode_results:
+                if "original_messages" not in result:
+                    ep = episodes_by_id.get(result.get("episode_id"))
+                    if ep:
+                        result["original_messages"] = ep.original_messages
+
+            # Enrich semantic results with source episode original_messages
+            for result in semantic_results:
+                # Get source episode IDs from various possible fields
+                source_ep_ids = (
+                    result.get("related_episodes")
+                    or result.get("source_episodes")
+                    or []
+                )
+                # Also check metadata for comma-separated source_episodes
+                if not source_ep_ids:
+                    meta = result.get("metadata", {})
+                    if isinstance(meta, dict):
+                        sep_str = meta.get("source_episodes", "")
+                        if sep_str:
+                            source_ep_ids = [s.strip() for s in sep_str.split(",") if s.strip()]
+
+                if isinstance(source_ep_ids, str):
+                    source_ep_ids = [s.strip() for s in source_ep_ids.split(",") if s.strip()]
+
+                source_original_messages = []
+                for ep_id in source_ep_ids:
+                    ep = episodes_by_id.get(ep_id)
+                    if ep:
+                        source_original_messages.extend(ep.original_messages)
+
+                if source_original_messages:
+                    result["source_original_messages"] = source_original_messages
+
+        except Exception as e:
+            logger.warning(f"Failed to enrich results with original_messages: {e}")
+
+        return episode_results, semantic_results
+
     def _search_episodes_by_method(self, user_id: str, query: str, top_k: int, search_method: str):
         """Search episodes by search method"""
         # Handle top_k=0 case: return empty list
