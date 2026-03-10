@@ -26,8 +26,11 @@ def construct_evidence_text(ranked_items, evidence_type='chunk', top_k=5):
         - If no subquestions: selects top-k items sequentially
         - If subquestions present: round-robin selection from each subquestion with deduplication by chunk_id
     """
-    # Filter items by evidence type
-    filtered = [item for item in ranked_items if item.get('res_type') == evidence_type]
+    # Filter items by evidence type (support both 'chunk' and 'memory')
+    if evidence_type in ('chunk', 'memory'):
+        filtered = [item for item in ranked_items if item.get('res_type') in ('chunk', 'memory')]
+    else:
+        filtered = [item for item in ranked_items if item.get('res_type') == evidence_type]
     
     # Check if items have subquestion information
     has_subquestions = any('subquestion_id' in item and item['subquestion_id'] > 0 for item in filtered)
@@ -169,7 +172,10 @@ def process_item(item, retrieval_data, args, client, person_name):
         print(f"  Processing {qid} with subquestion-based answering ({len(subquestions)} subquestions)")
         
         # Group ranked items by subquestion_id
-        filtered = [rank_item for rank_item in ranked_items if rank_item.get('res_type') == args.evidence_type]
+        if args.evidence_type in ('chunk', 'memory'):
+            filtered = [rank_item for rank_item in ranked_items if rank_item.get('res_type') in ('chunk', 'memory')]
+        else:
+            filtered = [rank_item for rank_item in ranked_items if rank_item.get('res_type') == args.evidence_type]
         subq_items = {}
         for rank_item in filtered:
             subq_id = rank_item.get('subquestion_id', 0)

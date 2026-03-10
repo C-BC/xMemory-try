@@ -139,11 +139,11 @@ def main(args):
         
         # Extract ranked chunk IDs
         ranked_items = result_obj.get('ranked_items', [])
-        # Filter for chunks only
+        # Filter for retrievable items (chunk or memory type)
         ranked_chunk_ids = [
-            item['chunk_id'] 
-            for item in ranked_items 
-            if item.get('res_type') == 'chunk' and 'chunk_id' in item
+            item['chunk_id']
+            for item in ranked_items
+            if item.get('res_type') in ('chunk', 'memory') and 'chunk_id' in item
         ]
         
         # Deduplicate chunk_ids (keep first occurrence only)
